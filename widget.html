@@ -51,9 +51,9 @@
 </head>
 <body>
   <div class="row">
-    <label for="gregDate">Civil:</label>
+    <label for="gregDate">Gregorian:</label>
     <input type="date" id="gregDate">
-    <label><input type="checkbox" id="afterSunset"> After Sunset</label>
+    <label><input type="checkbox" id="afterSunset"> Sunset</label>
   </div>
 
   <div class="row">
@@ -81,6 +81,7 @@
       "Adar","Nisan","Iyyar","Sivan","Tamuz","Av","Elul"
     ];
 
+    // Convert number to Hebrew gematria
     function toHebrewNumber(num) {
       const map = {
         1:"א",2:"ב",3:"ג",4:"ד",5:"ה",6:"ו",7:"ז",8:"ח",9:"ט",
@@ -116,14 +117,17 @@
     }
 
     function sendToJotform() {
+      const hebString = buildHebrewString();
+      const engString = buildEnglishString();
+
       if (typeof JFCustomWidget !== "undefined") {
         JFCustomWidget.sendData({
-          value: "",
+          value: engString,   // must always be non-empty
           valid: true,
           fields: {
             gregorian: gregDateInput.value,
-            hebrewHeb: buildHebrewString(),
-            hebrewEng: buildEnglishString(),
+            hebrewHeb: hebString,
+            hebrewEng: engString,
             afterSunset: sunsetCheck.checked ? "Yes" : "No"
           }
         });
@@ -178,7 +182,7 @@
     populateHebrewFields();
     gregDateInput.valueAsDate = new Date();
     updateHebrewFromGregorian();
+    sendToJotform(); // send initial data right away
   </script>
 </body>
 </html>
-
