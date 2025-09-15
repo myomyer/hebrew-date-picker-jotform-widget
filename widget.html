@@ -2,7 +2,7 @@
 <html lang="he">
 <head>
   <meta charset="UTF-8">
-  <title>Hebrew Date Picker</title>
+  <title>Hebrew Date (from Civil)</title>
   <style>
     body {
       font-family: var(--font-family, inherit);
@@ -10,76 +10,43 @@
       color: var(--font-color, inherit);
       background: var(--form-background, transparent);
       margin: 0;
-      padding: 4px;
+      padding: 6px;
     }
     label {
-      display: block;
-      margin-top: 4px;
       font-weight: bold;
-      text-align: left;
       font-size: 0.9em;
+      margin-right: 6px;
     }
-    input[type="date"], input[type="checkbox"], select {
-      font-family: inherit;
-      font-size: 0.9em;
-      padding: 4px;
-      border: var(--input-border, 1px solid #ccc);
-      border-radius: var(--input-radius, 4px);
-      background: var(--input-background, #fff);
-      color: inherit;
+    input[type="checkbox"] {
+      margin-left: 6px;
     }
-    .row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-top: 6px;
-    }
-    .inline {
-      display: inline-flex;
-      gap: 4px;
+    #hebrewOutput {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 4px 8px;
+      background: #f7f7f7;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 1em;
       direction: rtl;
     }
-    .inline select {
-      min-width: 65px;
-      max-width: 95px;
-      text-align: center;
-      direction: rtl;
-    }
-    #hYear { min-width: 75px; }
-    #civilDate { width: 130px; }
   </style>
 </head>
 <body>
-  <div class="row">
-    <label for="civilDate">Civil:</label>
-    <input type="date" id="civilDate">
-    <label><input type="checkbox" id="afterSunset"> After Sunset</label>
+  <div>
+    <label>
+      <input type="checkbox" id="afterSunset"> After Sunset
+    </label>
   </div>
 
-  <div class="row">
-    <label>Hebrew:</label>
-    <div class="inline">
-      <select id="hDay"></select>
-      <select id="hMonth"></select>
-      <select id="hYear"></select>
-    </div>
-  </div>
+  <div id="hebrewOutput">Waiting for Civil Date…</div>
 
   <script>
-    const civilDateInput = document.getElementById('civilDate');
     const sunsetCheck = document.getElementById('afterSunset');
-    const hDay = document.getElementById('hDay');
-    const hMonth = document.getElementById('hMonth');
-    const hYear = document.getElementById('hYear');
+    const hebrewOutput = document.getElementById('hebrewOutput');
 
-    const monthsHeb = [
-      "תשרי","חשון","כסלו","טבת","שבט",
-      "אדר","ניסן","אייר","סיון","תמוז","אב","אלול"
-    ];
-    const monthsEng = [
-      "Tishrei","Cheshvan","Kislev","Tevet","Shevat",
-      "Adar","Nisan","Iyyar","Sivan","Tamuz","Av","Elul"
-    ];
+    let lastCivil = null;
+    let sourceField = ""; // configured from widget settings
 
     // Hebrew numeral converter
     function toHebrewNumber(num) {
@@ -109,46 +76,68 @@
       return toHebrewNumber(year % 1000);
     }
 
-    function buildHebrewString() {
-      return `${toHebrewNumber(hDay.value)} ${hMonth.options[hMonth.selectedIndex].text} ${toShortHebrewYear(hYear.value)}`;
-    }
-    function buildEnglishString() {
-      return `${hDay.value} ${hMonth.value} ${hYear.value}`;
+    function formatHebrewDate(hd, hm, hy) {
+      return `${toHebrewNumber(hd)} ${hm} ${toShortHebrewYear(hy)}`;
     }
 
-    function sendToJotform() {
-      const hebString = buildHebrewString();
-      const engString = buildEnglishString();
-      const sunsetVal = sunsetCheck.checked ? "Yes" : "No";
-      const civilString = civilDateInput.value;
+    // Convert Civil date string to Hebrew
+    async function convertToHebrew(civilDate) {
+      if (!civilDate) return;
+      let dateToUse = civilDate;
 
-      // Always send something back
-      const combined = `Civil: ${civilString} | Hebrew: ${hebString} | After Sunset: ${sunsetVal}`;
-
-      if (typeof JFCustomWidget !== "undefined") {
-        JFCustomWidget.sendData({
-          value: combined,
-          valid: true,
-          fields: {
-            civil: civilString,
-            hebrewHeb: hebString,
-            hebrewEng: engString,
-            afterSunset: sunsetVal
-          }
-        });
+      // Apply after-sunset bump
+      if (sunsetCheck.checked) {
+        let d = new Date(civilDate);
+        d.setDate(d.getDate() + 1);
+        dateToUse = d.toISOString().split("T")[0];
       }
 
-      // Map to hidden fields by their Unique Names
-      const gField = document.querySelector('input[name="civilDate"]');
-      const hField = document.querySelector('input[name="hebrewDate"]');
-      const sField = document.querySelector('input[name="afterSunset"]');
-      if (gField) gField.value = civilString;
-      if (hField) hField.value = hebString;
-      if (sField) sField.value = sunsetVal;
+      const url = `https://www.hebcal.com/converter?cfg=json&date=${dateToUse}&g2h=1&strict=1`;
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        const hebString = formatHebrewDate(data.hd, data.hm, data.hy);
+
+        hebrewOutput.textContent = hebString;
+
+        if (typeof JFCustomWidget !== "undefined") {
+          JFCustomWidget.sendData({
+            value: hebString,
+            valid: true
+          });
+        }
+      } catch (err) {
+        hebrewOutput.textContent = "Error fetching Hebrew date";
+      }
     }
 
-    function populateHebrewFields() {
-      for (let d=1; d<=30; d++) {
-        hDay.add(new Option(toHebrewNumber(d), d));
-      }
-      monthsHeb
+    // Jotform widget integration
+    if (typeof JFCustomWidget !== "undefined") {
+      // Get widget settings
+      JFCustomWidget.subscribe("ready", function(data) {
+        if (data && data.sourceField) {
+          sourceField = data.sourceField;
+        }
+      });
+
+      // Listen for Civil Date updates
+      JFCustomWidget.subscribe("populate", function(data) {
+        if (!data) return;
+
+        // If a specific field is configured, only listen to that
+        if (sourceField && data.name !== sourceField) return;
+
+        if (data.value) {
+          lastCivil = data.value;
+          convertToHebrew(lastCivil);
+        }
+      });
+    }
+
+    // Recalculate if After Sunset toggled
+    sunsetCheck.addEventListener("change", () => {
+      if (lastCivil) convertToHebrew(lastCivil);
+    });
+  </script>
+</body>
+</html>
