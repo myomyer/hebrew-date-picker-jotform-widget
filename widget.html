@@ -46,14 +46,14 @@
       direction: rtl;
     }
     #hYear { min-width: 75px; }
-    #gregDate { width: 130px; }
+    #civilDate { width: 130px; }
   </style>
 </head>
 <body>
   <div class="row">
-    <label for="gregDate">Gregorian:</label>
-    <input type="date" id="gregDate">
-    <label><input type="checkbox" id="afterSunset"> Sunset</label>
+    <label for="civilDate">Civil:</label>
+    <input type="date" id="civilDate">
+    <label><input type="checkbox" id="afterSunset"> After Sunset</label>
   </div>
 
   <div class="row">
@@ -66,7 +66,7 @@
   </div>
 
   <script>
-    const gregDateInput = document.getElementById('gregDate');
+    const civilDateInput = document.getElementById('civilDate');
     const sunsetCheck = document.getElementById('afterSunset');
     const hDay = document.getElementById('hDay');
     const hMonth = document.getElementById('hMonth');
@@ -81,7 +81,7 @@
       "Adar","Nisan","Iyyar","Sivan","Tamuz","Av","Elul"
     ];
 
-    // Convert number to Hebrew gematria
+    // Hebrew numeral converter
     function toHebrewNumber(num) {
       const map = {
         1:"א",2:"ב",3:"ג",4:"ד",5:"ה",6:"ו",7:"ז",8:"ח",9:"ט",
@@ -119,70 +119,36 @@
     function sendToJotform() {
       const hebString = buildHebrewString();
       const engString = buildEnglishString();
+      const sunsetVal = sunsetCheck.checked ? "Yes" : "No";
+      const civilString = civilDateInput.value;
+
+      // Always send something back
+      const combined = `Civil: ${civilString} | Hebrew: ${hebString} | After Sunset: ${sunsetVal}`;
 
       if (typeof JFCustomWidget !== "undefined") {
         JFCustomWidget.sendData({
-          value: engString,   // must always be non-empty
+          value: combined,
           valid: true,
           fields: {
-            gregorian: gregDateInput.value,
+            civil: civilString,
             hebrewHeb: hebString,
             hebrewEng: engString,
-            afterSunset: sunsetCheck.checked ? "Yes" : "No"
+            afterSunset: sunsetVal
           }
         });
       }
+
+      // Map to hidden fields by their Unique Names
+      const gField = document.querySelector('input[name="civilDate"]');
+      const hField = document.querySelector('input[name="hebrewDate"]');
+      const sField = document.querySelector('input[name="afterSunset"]');
+      if (gField) gField.value = civilString;
+      if (hField) hField.value = hebString;
+      if (sField) sField.value = sunsetVal;
     }
 
     function populateHebrewFields() {
       for (let d=1; d<=30; d++) {
         hDay.add(new Option(toHebrewNumber(d), d));
       }
-      monthsHeb.forEach((m,i) => hMonth.add(new Option(m, monthsEng[i])));
-      for (let y=5700; y<=5900; y++) {
-        hYear.add(new Option(toShortHebrewYear(y), y));
-      }
-    }
-
-    async function updateHebrewFromGregorian() {
-      if (!gregDateInput.value) return;
-      const url = `https://www.hebcal.com/converter?cfg=json&date=${gregDateInput.value}&g2h=1&strict=1`;
-      const res = await fetch(url);
-      const data = await res.json();
-      let hebDay = data.hd, hebMonth = data.hm, hebYear = data.hy;
-
-      if (sunsetCheck.checked) {
-        let nextDate = new Date(gregDateInput.value);
-        nextDate.setDate(nextDate.getDate() + 1);
-        const iso = nextDate.toISOString().split("T")[0];
-        const bumpUrl = `https://www.hebcal.com/converter?cfg=json&date=${iso}&g2h=1&strict=1`;
-        const bumpRes = await fetch(bumpUrl);
-        const bumpData = await bumpRes.json();
-        hebDay = bumpData.hd; hebMonth = bumpData.hm; hebYear = bumpData.hy;
-      }
-      hDay.value = hebDay; hMonth.value = hebMonth; hYear.value = hebYear;
-      sendToJotform();
-    }
-
-    async function updateGregorianFromHebrew() {
-      const hy = hYear.value, hm = hMonth.value, hd = hDay.value;
-      const url = `https://www.hebcal.com/converter?cfg=json&hy=${hy}&hm=${hm}&hd=${hd}&h2g=1&strict=1`;
-      const res = await fetch(url);
-      const data = await res.json();
-      gregDateInput.value = `${data.gy}-${String(data.gm).padStart(2,'0')}-${String(data.gd).padStart(2,'0')}`;
-      sendToJotform();
-    }
-
-    gregDateInput.addEventListener('change', updateHebrewFromGregorian);
-    sunsetCheck.addEventListener('change', updateHebrewFromGregorian);
-    hDay.addEventListener('change', updateGregorianFromHebrew);
-    hMonth.addEventListener('change', updateGregorianFromHebrew);
-    hYear.addEventListener('change', updateGregorianFromHebrew);
-
-    populateHebrewFields();
-    gregDateInput.valueAsDate = new Date();
-    updateHebrewFromGregorian();
-    sendToJotform(); // send initial data right away
-  </script>
-</body>
-</html>
+      monthsHeb
