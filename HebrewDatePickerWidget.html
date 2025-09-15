@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+  <meta charset="UTF-8">
+  <title>Hebrew Date Picker</title>
+  <style>
+    body {
+      font-family: var(--font-family, inherit);
+      font-size: var(--font-size, inherit);
+      color: var(--font-color, inherit);
+      background: var(--form-background, transparent);
+      margin: 0;
+      padding: 4px;
+    }
+    label {
+      display: block;
+      margin-top: 4px;
+      font-weight: bold;
+      text-align: left;
+      font-size: 0.9em;
+    }
+    input[type="date"], input[type="checkbox"], select {
+      font-family: inherit;
+      font-size: 0.9em;
+      padding: 4px;
+      border: var(--input-border, 1px solid #ccc);
+      border-radius: var(--input-radius, 4px);
+      background: var(--input-background, #fff);
+      color: inherit;
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .inline {
+      display: inline-flex;
+      gap: 4px;
+      direction: rtl;
+    }
+    .inline select {
+      min-width: 65px;
+      max-width: 95px;
+      text-align: center;
+      direction: rtl;
+    }
+    #hYear { min-width: 75px; }
+    #gregDate { width: 130px; }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <label for="gregDate">Gregorian:</label>
+    <input type="date" id="gregDate">
+    <label><input type="checkbox" id="afterSunset"> Sunset</label>
+  </div>
+
+  <div class="row">
+    <label>Hebrew:</label>
+    <div class="inline">
+      <select id="hDay"></select>
+      <select id="hMonth"></select>
+      <select id="hYear"></select>
+    </div>
+  </div>
+
+  <script>
+    const gregDateInput = document.getElementById('gregDate');
+    const sunsetCheck = document.getElementById('afterSunset');
+    const hDay = document.getElementById('hDay');
+    const hMonth = document.getElementById('hMonth');
+    const hYear = document.getElementById('hYear');
+
+    const monthsHeb = [
+      "תשרי","חשון","כסלו","טבת","שבט",
+      "אדר","ניסן","אייר","סיון","תמוז","אב","אלול"
+    ];
+    const monthsEng = [
+      "Tishrei","Cheshvan","Kislev","Tevet","Shevat",
+      "Adar","Nisan","Iyyar","Sivan","Tamuz","Av","Elul"
+    ];
+
+    function toHebrewNumber(num) {
+      const map = {
+        1:"א",2:"ב",3:"ג",4:"ד",5:"ה",6:"ו",7:"ז",8:"ח",9:"ט",
+        10:"י",20:"כ",30:"ל",40:"מ",50:"נ",60:"ס",70:"ע",80:"פ",90:"צ",
+        100:"ק",200:"ר",300:"ש",400:"ת"
+      };
+      let parts = [];
+      let n = num;
+      [400,300,200,100].forEach(v=>{
+        while (n >= v) { parts.push(map[v]); n -= v; }
+      });
+      [90,80,70,60,50,40,30,20,10].forEach(v=>{
+        while (n >= v) { parts.push(map[v]); n -= v; }
+      });
+      if (n > 0) parts.push(map[n]);
+      let str = parts.join("");
+      if (str === "יה") str = "טו";
+      if (str === "יו") str = "טז";
+      if (str.length === 1) return str + "׳";
+      if (str.length > 1) return str.slice(0,-1) + "״" + str.slice(-1);
+      return str;
+    }
+
+    function toShortHebrewYear(year) {
+      return toHebrewNumber(year % 1000);
+    }
+
+    function buildHebrewString() {
+      return `${toHebrewNumber(hDay.value)} ${hMonth.options[hMonth.selectedIndex].text} ${toShortHebrewYear(hYear.value)}`;
+    }
+    function buildEnglishString() {
+      return `${hDay.value} ${hMonth.value} ${hYear.value}`;
+    }
+
+    function sendToJotform() {
+      if (typeof JFCustomWidget !== "undefined") {
+        JFCustomWidget.sendData({
+          value: "",
+          valid: true,
+          fields: {
+            gregorian: gregDateInput.value,
+            hebrewHeb: buildHebrewString(),
+            hebrewEng: buildEnglishString(),
+            afterSunset: sunsetCheck.checked ? "Yes" : "No"
+          }
+        });
+      }
+    }
+
+    function populateHebrewFields() {
+      for (let d=1; d<=30; d++) {
+        hDay.add(new Option(toHebrewNumber(d), d));
+      }
+      monthsHeb.forEach((m,i) => hMonth.add(new Option(m, monthsEng[i])));
+      for (let y=5700; y<=5900; y++) {
+        hYear.add(new Option(toShortHebrewYear(y), y));
+      }
+    }
+
+    async function updateHebrewFromGregorian() {
+      if (!gregDateInput.value) return;
+      const url = `https://www.hebcal.com/converter?cfg=json&date=${gregDateInput.value}&g2h=1&strict=1`;
+      const res = await fetch(url);
+      const data = await res.json();
+      let hebDay = data.hd, hebMonth = data.hm, hebYear = data.hy;
+
+      if (sunsetCheck.checked) {
+        let nextDate = new Date(gregDateInput.value);
+        nextDate.setDate(nextDate.getDate() + 1);
+        const iso = nextDate.toISOString().split("T")[0];
+        const bumpUrl = `https://www.hebcal.com/converter?cfg=json&date=${iso}&g2h=1&strict=1`;
+        const bumpRes = await fetch(bumpUrl);
+        const bumpData = await bumpRes.json();
+        hebDay = bumpData.hd; hebMonth = bumpData.hm; hebYear = bumpData.hy;
+      }
+      hDay.value = hebDay; hMonth.value = hebMonth; hYear.value = hebYear;
+      sendToJotform();
+    }
+
+    async function updateGregorianFromHebrew() {
+      const hy = hYear.value, hm = hMonth.value, hd = hDay.value;
+      const url = `https://www.hebcal.com/converter?cfg=json&hy=${hy}&hm=${hm}&hd=${hd}&h2g=1&strict=1`;
+      const res = await fetch(url);
+      const data = await res.json();
+      gregDateInput.value = `${data.gy}-${String(data.gm).padStart(2,'0')}-${String(data.gd).padStart(2,'0')}`;
+      sendToJotform();
+    }
+
+    gregDateInput.addEventListener('change', updateHebrewFromGregorian);
+    sunsetCheck.addEventListener('change', updateHebrewFromGregorian);
+    hDay.addEventListener('change', updateGregorianFromHebrew);
+    hMonth.addEventListener('change', updateGregorianFromHebrew);
+    hYear.addEventListener('change', updateGregorianFromHebrew);
+
+    populateHebrewFields();
+    gregDateInput.valueAsDate = new Date();
+    updateHebrewFromGregorian();
+  </script>
+</body>
+</html>
