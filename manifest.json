@@ -1,10 +1,10 @@
 {
   "name": "Hebrew Date Picker (from Civil)",
   "description": "Converts a Civil (Gregorian) Date Picker field into its Hebrew calendar equivalent. Includes After Sunset adjustment for accurate rollover. Outputs only the Hebrew date.",
-  "url": "https://YOUR_USERNAME.github.io/hebrew-date-picker/widget.html",
+  "url": "https://myomyer.github.io/hebrew-date-picker-jotform-widget/widget.html",
   "width": 280,
   "height": 100,
-  "icon": "https://YOUR_USERNAME.github.io/hebrew-date-picker/icon.png",
+  "icon": "https://myomyer.github.io/hebrew-date-picker-jotform-widget/icon.png",
   "categories": ["Date", "Time", "Calendar"],
   "properties": [
     {
@@ -16,3 +16,4 @@
     }
   ]
 }
+
